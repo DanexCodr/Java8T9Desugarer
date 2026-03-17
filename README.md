@@ -223,3 +223,26 @@ desugar any JAR attached to the latest release.
   manually.
 - **`@SafeVarargs` on private instance methods** – handled implicitly; the
   annotation is kept and the method is made package-private.
+- **`invokedynamic` string concatenation** – Java 9+ compilers (`javac 9+`)
+  emit `INVOKEDYNAMIC` instructions backed by
+  `java.lang.invoke.StringConcatFactory` for `+` string concatenation.
+  `StringConcatFactory` does not exist on Java 8. The desugarer does not
+  replace these bootstrap methods, so class files compiled with a Java 9+
+  `javac` (without `-source 8 -target 8`) will throw `NoClassDefFoundError`
+  for `StringConcatFactory` at runtime on Java 8.
+- **Multi-release JARs (MRJARs)** – JARs with `META-INF/versions/9/` (or
+  higher) entries are not processed specially. Only the base entries are
+  desugared; the version-specific entries under `META-INF/versions/` are
+  passed through unchanged. The resulting JAR may therefore contain
+  undesugared class files at the version-specific paths.
+- **Collection iteration order** – `Set.of()` and `Map.of()` in Java 9
+  deliberately randomise iteration order across JVM runs to reduce
+  hash-collision DoS exposure. The `CollectionBackport` uses
+  `LinkedHashSet`/`LinkedHashMap`, which preserves insertion order. Code
+  that (incorrectly) depends on non-deterministic ordering may observe
+  different behaviour after desugaring.
+- **`Class.getModule()` and module-layer APIs** – Calls to
+  `java.lang.Class.getModule()`, `java.lang.Module`,
+  `java.lang.ModuleLayer`, and related APIs introduced in Java 9 are not
+  remapped. These will result in `NoSuchMethodError` or
+  `ClassNotFoundException` when the desugared JAR is run on Java 8.
