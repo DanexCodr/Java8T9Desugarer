@@ -121,7 +121,7 @@ jar cfe build/desugar9to8.jar desugarer.Java9ToJava8Desugarer -C build/fatjar .
 ## Usage
 
 ```
-java -jar build/desugar9to8.jar [--incremental] [--cache-dir <dir>] <input-java9.jar> <output-java8.jar> [backport-classes-dir]
+java -jar build/desugar9to8.jar [--incremental] [--cache-dir <dir>] [--class-path <path>] <input-java9.jar> <output-java8.jar> [backport-classes-dir]
 ```
 
 | Argument | Description |
@@ -131,6 +131,7 @@ java -jar build/desugar9to8.jar [--incremental] [--cache-dir <dir>] <input-java9
 | `[backport-classes-dir]` | Optional: directory containing compiled `j9compat/*.class` files. If provided, the backport classes are bundled into the output JAR. |
 | `--incremental` | Enable incremental mode (reuse unchanged output entries). |
 | `--cache-dir <dir>` | Cache directory for incremental mode (default: `build/.desugar-cache`). |
+| `--class-path <path>` | Extra classpath entries (jar/dir, separated by your platform path separator) used to resolve `InputStream` subclasses. |
 
 ### Example
 

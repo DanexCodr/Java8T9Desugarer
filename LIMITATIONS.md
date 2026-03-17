@@ -25,11 +25,6 @@ be migrated manually.
 - **String concatenation performance** – `invokedynamic` string concatenation
   is rewritten to `StringBuilder` bytecode. The output is functionally correct
   but does not use `StringConcatFactory` optimizations.
-- **InputStream remapping is type-aware** – Calls are rewritten only when the
-  receiver class can be resolved as `InputStream` or a subclass (from the input
-  JAR or the runtime classpath). If a dependency class cannot be resolved, the
-  call is left unchanged and may need the dependency on the classpath or manual
-  migration.
 - **Private interface methods become package-private** – Java 8 rejects private
   interface methods, so the desugarer strips `ACC_PRIVATE`. This makes those
   methods package-private, which can allow same-package access and changes
