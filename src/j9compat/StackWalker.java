@@ -207,9 +207,6 @@ public final class StackWalker {
                 return DEFAULT_CACHE_LIMIT;
             }
             String trimmed = value.trim();
-            if (trimmed.isEmpty()) {
-                return DEFAULT_CACHE_LIMIT;
-            }
             try {
                 int parsed = Integer.parseInt(trimmed);
                 if (parsed <= 0) {
