@@ -110,7 +110,9 @@ public final class ObjectsBackport {
      * @throws IndexOutOfBoundsException if the sub-range is out of bounds
      */
     public static int checkFromIndexSize(int fromIndex, int size, int length) {
-        if (fromIndex < 0 || size < 0 || fromIndex > length - size) {
+        // Use bitwise-or to test all three in one comparison, matching the
+        // Java 9 source pattern and avoiding integer overflow in length-size.
+        if ((fromIndex | size | length) < 0 || size > length - fromIndex) {
             throw new IndexOutOfBoundsException(
                     "fromIndex=" + fromIndex + ", size=" + size
                     + ", length=" + length);

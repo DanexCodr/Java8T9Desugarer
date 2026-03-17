@@ -108,19 +108,17 @@ public final class IOBackport {
     public static byte[] readNBytes(InputStream in, int n) throws IOException {
         Objects.requireNonNull(in, "in");
         if (n < 0) throw new IllegalArgumentException("n < 0");
+        if (n == 0) return new byte[0];
 
-        byte[] result = new byte[0];
+        ByteArrayOutputStream baos = new ByteArrayOutputStream(Math.min(n, DEFAULT_BUFFER_SIZE));
+        byte[] buf = new byte[Math.min(n, DEFAULT_BUFFER_SIZE)];
         int remaining = n;
-        while (remaining > 0) {
-            byte[] buf = new byte[Math.min(remaining, DEFAULT_BUFFER_SIZE)];
-            int read = in.read(buf, 0, buf.length);
-            if (read < 0) break;
-            byte[] newResult = new byte[result.length + read];
-            System.arraycopy(result, 0, newResult, 0, result.length);
-            System.arraycopy(buf,    0, newResult, result.length, read);
-            result    = newResult;
+        int read;
+        while (remaining > 0
+                && (read = in.read(buf, 0, Math.min(remaining, buf.length))) >= 0) {
+            baos.write(buf, 0, read);
             remaining -= read;
         }
-        return result;
+        return baos.toByteArray();
     }
 }
