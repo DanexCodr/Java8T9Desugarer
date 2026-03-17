@@ -31,7 +31,7 @@ import java.util.jar.*;
  *  - java.util.Objects additions                  (requireNonNullElse,
  *    requireNonNullElseGet, checkIndex)
  *  - java.util.concurrent.CompletableFuture additions  (orTimeout,
- *    completeOnTimeout, failedFuture, completedStage, failedStage)
+ *    completeOnTimeout, failedFuture, completedStage, failedStage, copy)
  *
  * Usage:
  *   java -cp desugar9to8.jar:asm-9.4.jar:asm-commons-9.4.jar:asm-tree-9.4.jar \
