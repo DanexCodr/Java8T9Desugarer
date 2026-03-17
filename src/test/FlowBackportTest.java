@@ -1,6 +1,11 @@
 package test;
 
 import j9compat.Flow;
+import j9compat.SubmissionPublisher;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import static test.BackportTestRunner.*;
 
@@ -51,5 +56,99 @@ public final class FlowBackportTest {
 
         publisher.subscribe(subscriber);
         assertTrue(subscribed[0], "Flow.Publisher.subscribe: delivers onSubscribe");
+
+        testSubmissionPublisher();
+        testSubmissionPublisherDrop();
+    }
+
+    private static void testSubmissionPublisher() {
+        SubmissionPublisher<String> publisher = new SubmissionPublisher<String>(new DirectExecutor(), 16);
+        List<String> received = new ArrayList<String>();
+        final boolean[] completed = {false};
+
+        Flow.Subscriber<String> subscriber = new Flow.Subscriber<String>() {
+            @Override
+            public void onSubscribe(Flow.Subscription subscription) {
+                subscription.request(Long.MAX_VALUE);
+            }
+
+            @Override
+            public void onNext(String item) {
+                received.add(item);
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                fail("SubmissionPublisher.onError: unexpected error " + throwable);
+            }
+
+            @Override
+            public void onComplete() {
+                completed[0] = true;
+            }
+        };
+
+        publisher.subscribe(subscriber);
+        publisher.submit("one");
+        publisher.submit("two");
+        publisher.close();
+
+        assertEquals(Arrays.asList("one", "two"), received,
+                "SubmissionPublisher.submit: delivers submitted items");
+        assertTrue(completed[0], "SubmissionPublisher.close: completes subscriber");
+    }
+
+    private static void testSubmissionPublisherDrop() {
+        SubmissionPublisher<String> publisher = new SubmissionPublisher<String>(new DirectExecutor(), 1);
+        final int[] drops = {0};
+
+        HoldingSubscriber<String> subscriber = new HoldingSubscriber<String>();
+
+        publisher.subscribe(subscriber);
+        publisher.offer("first", (sub, item) -> {
+            drops[0]++;
+            return true;
+        });
+        publisher.offer("second", (sub, item) -> {
+            drops[0]++;
+            return true;
+        });
+        assertEquals(1, drops[0], "SubmissionPublisher.offer: drops when buffer full");
+        subscriber.cancel();
+        publisher.close();
+    }
+
+    private static final class HoldingSubscriber<T> implements Flow.Subscriber<T> {
+        private Flow.Subscription subscription;
+
+        @Override
+        public void onSubscribe(Flow.Subscription subscription) {
+            this.subscription = subscription;
+        }
+
+        @Override
+        public void onNext(T item) {
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+        }
+
+        @Override
+        public void onComplete() {
+        }
+
+        void cancel() {
+            if (subscription != null) {
+                subscription.cancel();
+            }
+        }
+    }
+
+    private static final class DirectExecutor implements java.util.concurrent.Executor {
+        @Override
+        public void execute(Runnable command) {
+            command.run();
+        }
     }
 }

@@ -52,10 +52,9 @@ be migrated manually.
   reflective checks and may report unknown PIDs or missing start times.
 - **`StackWalker` uses stack traces** – Frames are derived from
   `Thread.getStackTrace()` and do not expose hidden frames or bytecode indices.
-  `StackFrame.getDeclaringClass()` requires
+  `StackFrame.getMethodType()` / `getDescriptor()` are resolved from class files
+  when available, and `StackFrame.getDeclaringClass()` requires
   `StackWalker.Option.RETAIN_CLASS_REFERENCE`.
-- **`Flow` is interface-only** – The backport provides the reactive-stream
-  interfaces and default buffer size, but no runtime implementation.
 
 ## Version coverage notes
 
