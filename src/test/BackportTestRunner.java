@@ -86,6 +86,9 @@ public final class BackportTestRunner {
         ProcessHandleBackportTest.run();
         FlowBackportTest.run();
         StackWalkerBackportTest.run();
+        ModuleBackportTest.run();
+        VarHandleBackportTest.run();
+        ReflectionBackportTest.run();
 
         System.out.println("\n=== Results ===");
         System.out.println("Passed : " + passed);

@@ -27,6 +27,9 @@ fully **Java 8-compatible** JAR, including a bundled runtime backport library
 | **Objects additions** | Redirects `requireNonNullElse()`, `requireNonNullElseGet()`, `checkIndex()`, `checkFromToIndex()`, and `checkFromIndexSize()` to `j9compat.ObjectsBackport`. |
 | **CompletableFuture additions** | Redirects `orTimeout()`, `completeOnTimeout()`, `failedFuture()`, `completedStage()`, `failedStage()`, `minimalCompletionStage()`, `newIncompleteFuture()`, and `copy()` to `j9compat.CompletableFutureBackport`. |
 | **Process/Stack/Flow types** | Remaps `ProcessHandle`, `StackWalker`, `Flow`, and `SubmissionPublisher` to Java 8-compatible `j9compat` implementations. |
+| **Module system APIs** | Redirects `Class.getModule()` and remaps `Module`, `ModuleLayer`, and related descriptor types to `j9compat` backports. |
+| **VarHandle APIs** | Redirects `VarHandle` lookups (including `findVarHandle` and `arrayElementVarHandle`) to `j9compat.VarHandle`. |
+| **Reflection/MethodHandle lookups** | Redirects `Class.getMethod` and `MethodHandles.Lookup` lookups of Java 9 APIs to the backport implementations. |
 
 ---
 
@@ -93,7 +96,21 @@ javac -source 8 -target 8 \
   src/j9compat/ProcessHandle.java \
   src/j9compat/StackWalker.java \
   src/j9compat/Flow.java \
-  src/j9compat/SubmissionPublisher.java
+  src/j9compat/SubmissionPublisher.java \
+  src/j9compat/ModuleBackport.java \
+  src/j9compat/Module.java \
+  src/j9compat/ModuleLayer.java \
+  src/j9compat/ModuleDescriptor.java \
+  src/j9compat/Configuration.java \
+  src/j9compat/ModuleFinder.java \
+  src/j9compat/ModuleReference.java \
+  src/j9compat/ModuleReader.java \
+  src/j9compat/ResolvedModule.java \
+  src/j9compat/VarHandle.java \
+  src/j9compat/BackportMappings.java \
+  src/j9compat/ReflectionBackport.java \
+  src/j9compat/MethodHandlesBackport.java \
+  src/j9compat/PrivateInterfaceAccess.java
 
 # 2. Compile the desugarer tool
 mkdir -p build/desugarer
@@ -246,6 +263,33 @@ ProcessHandle.current()        --> j9compat.ProcessHandle.current()
 StackWalker.getInstance()      --> j9compat.StackWalker.getInstance()
 Flow.Publisher<T>              --> j9compat.Flow.Publisher<T>
 SubmissionPublisher<T>         --> j9compat.SubmissionPublisher<T>
+```
+
+### Module system APIs
+```java
+Class<?> c = ...;
+c.getModule()                  --> j9compat.ModuleBackport.getModule(c)
+```
+
+### VarHandle APIs
+```java
+MethodHandles.lookup()
+    .findVarHandle(Foo.class, "field", int.class)
+    --> j9compat.MethodHandlesBackport.findVarHandle(...)
+
+MethodHandles.arrayElementVarHandle(int[].class)
+    --> j9compat.MethodHandlesBackport.arrayElementVarHandle(int[].class)
+```
+
+### Reflection / MethodHandle lookups
+```java
+Class<?> c = Stream.class;
+c.getMethod("takeWhile", Predicate.class)
+    --> j9compat.ReflectionBackport.getMethod(...)
+
+MethodHandles.lookup()
+    .findVirtual(Stream.class, "takeWhile", MethodType.methodType(Stream.class, Predicate.class))
+    --> j9compat.MethodHandlesBackport.findVirtual(...)
 ```
 
 ---
