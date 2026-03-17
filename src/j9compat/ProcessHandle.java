@@ -1,6 +1,5 @@
 package j9compat;
 
-import java.lang.management.ManagementFactory;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -233,7 +232,10 @@ final class ProcessHandleImpl implements ProcessHandle {
     }
 
     private static long currentPid() {
-        String name = ManagementFactory.getRuntimeMXBean().getName();
+        String name = runtimeName();
+        if (name == null) {
+            return -1;
+        }
         int at = name.indexOf('@');
         if (at > 0) {
             try {
@@ -256,6 +258,44 @@ final class ProcessHandleImpl implements ProcessHandle {
         }
         return -1;
     }
+
+    private static String runtimeName() {
+        Object runtime = runtimeMxBean();
+        if (runtime == null) {
+            return null;
+        }
+        try {
+            Object value = runtime.getClass().getMethod("getName").invoke(runtime);
+            return value != null ? value.toString() : null;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    static Long runtimeStartTime() {
+        Object runtime = runtimeMxBean();
+        if (runtime == null) {
+            return null;
+        }
+        try {
+            Object value = runtime.getClass().getMethod("getStartTime").invoke(runtime);
+            if (value instanceof Number) {
+                return ((Number) value).longValue();
+            }
+            return null;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static Object runtimeMxBean() {
+        try {
+            Class<?> managementFactory = Class.forName("java.lang.management.ManagementFactory");
+            return managementFactory.getMethod("getRuntimeMXBean").invoke(null);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
 }
 
 final class InfoImpl implements ProcessHandle.Info {
@@ -273,8 +313,10 @@ final class InfoImpl implements ProcessHandle.Info {
             this.commandLine = System.getProperty("sun.java.command");
             this.command = deriveCommand(commandLine);
             this.arguments = deriveArguments(commandLine);
-            long startMillis = ManagementFactory.getRuntimeMXBean().getStartTime();
-            this.startInstant = startMillis > 0 ? Instant.ofEpochMilli(startMillis) : null;
+            Long startMillis = ProcessHandleImpl.runtimeStartTime();
+            this.startInstant = (startMillis != null && startMillis > 0)
+                    ? Instant.ofEpochMilli(startMillis)
+                    : null;
             this.user = System.getProperty("user.name");
         } else {
             this.commandLine = null;

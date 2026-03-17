@@ -46,6 +46,12 @@ import java.util.jar.*;
  */
 public class Java9ToJava8Desugarer {
 
+    private static final String CACHE_FILE_SUFFIX = ".desugar-cache.properties";
+    private static final String CACHE_VERSION_KEY = "__cacheVersion";
+    private static final String CACHE_INPUT_KEY = "__inputPath";
+    private static final String CACHE_OUTPUT_KEY = "__outputPath";
+    private static final String CACHE_VERSION = "1";
+
     // ── Backport class source-file paths (relative to src/) ─────────────────
     private static final String[] BACKPORT_CLASSES = {
         "j9compat/CollectionBackport.class",
@@ -78,20 +84,21 @@ public class Java9ToJava8Desugarer {
     // ────────────────────────────────────────────────────────────────────────
 
     public static void main(String[] args) throws Exception {
-        if (args.length < 2) {
-            System.err.println(
-                "Usage: java desugarer.Java9ToJava8Desugarer <input.jar> <output.jar> [backport-classes-dir]");
-            System.err.println();
-            System.err.println("  <input.jar>            Java 9-compiled JAR to desugar");
-            System.err.println("  <output.jar>           Java 8-compatible output JAR");
-            System.err.println("  [backport-classes-dir] Optional directory that contains compiled");
-            System.err.println("                         j9compat/*.class backport files to bundle");
+        Options options = parseArgs(args);
+        if (options == null) {
+            printUsage();
             System.exit(1);
         }
+        if (options.showHelp) {
+            printUsage();
+            return;
+        }
 
-        String inputPath = args[0];
-        String outputPath = args[1];
-        String backportDir = args.length >= 3 ? args[2] : null;
+        requireTemurinRuntime();
+
+        String inputPath = options.inputPath;
+        String outputPath = options.outputPath;
+        String backportDir = options.backportDir;
 
         File inputFile = new File(inputPath);
         if (!inputFile.exists()) {
@@ -102,9 +109,14 @@ public class Java9ToJava8Desugarer {
         System.out.println("=== Java 9 → Java 8 Desugarer ===");
         System.out.println("Input  : " + inputFile.getAbsolutePath());
         System.out.println("Output : " + new File(outputPath).getAbsolutePath());
+        System.out.println("Mode   : " + (options.incremental ? "incremental" : "full"));
+        if (options.incremental) {
+            System.out.println("Cache  : " + options.cacheFile.getAbsolutePath());
+        }
 
         Stats stats = new Stats();
-        desugarJar(inputFile, new File(outputPath), backportDir, stats);
+        IncrementalConfig incremental = new IncrementalConfig(options.incremental, options.cacheFile);
+        desugarJar(inputFile, new File(outputPath), backportDir, stats, incremental);
 
         System.out.println();
         System.out.println("── Summary ──────────────────────────────");
@@ -114,6 +126,9 @@ public class Java9ToJava8Desugarer {
         System.out.println("  API calls remapped : " + stats.apiCallsRemapped);
         System.out.println("  Iface priv methods : " + stats.privateIfaceMethods);
         System.out.println("  Other entries kept : " + stats.otherEntries);
+        if (options.incremental) {
+            System.out.println("  Entries reused     : " + stats.entriesReused);
+        }
         System.out.println("Desugaring complete.");
     }
 
@@ -122,9 +137,24 @@ public class Java9ToJava8Desugarer {
     // ────────────────────────────────────────────────────────────────────────
 
     public static void desugarJar(File input, File output,
-                                  String backportDir, Stats stats) throws Exception {
+                                  String backportDir, Stats stats,
+                                  IncrementalConfig incremental) throws Exception {
 
         Set<String> written = new HashSet<>();
+        Map<String, String> previousHashes = Collections.emptyMap();
+        Map<String, String> currentHashes = new HashMap<>();
+        JarFile previousOutputJar = null;
+        File previousOutputSnapshot = null;
+
+        if (incremental.enabled) {
+            previousHashes = loadCache(incremental.cacheFile, input, output);
+            if (!previousHashes.isEmpty() && output.isFile()) {
+                previousOutputSnapshot = createOutputSnapshot(output, incremental.cacheFile);
+                if (previousOutputSnapshot != null) {
+                    previousOutputJar = new JarFile(previousOutputSnapshot);
+                }
+            }
+        }
 
         try (JarFile jarFile = new JarFile(input);
              JarOutputStream jos = new JarOutputStream(
@@ -143,6 +173,29 @@ public class Java9ToJava8Desugarer {
 
                 try (InputStream is = jarFile.getInputStream(entry)) {
                     byte[] bytes = readAllBytes(is);
+                    if (incremental.enabled) {
+                        String digest = sha256(bytes);
+                        currentHashes.put(name, digest);
+                        if (previousOutputJar != null) {
+                            String previousDigest = previousHashes.get(name);
+                            if (digest.equals(previousDigest)) {
+                                JarEntry cachedEntry = previousOutputJar.getJarEntry(name);
+                                if (cachedEntry != null) {
+                                    try (InputStream cachedStream = previousOutputJar.getInputStream(cachedEntry)) {
+                                        bytes = readAllBytes(cachedStream);
+                                    }
+                                    stats.entriesReused++;
+                                    if (name.endsWith(".class")) {
+                                        stats.classesProcessed++;
+                                    } else {
+                                        stats.otherEntries++;
+                                    }
+                                    writeEntry(jos, name, bytes, written);
+                                    continue;
+                                }
+                            }
+                        }
+                    }
 
                     if (name.endsWith(".class")) {
                         ClassTransformResult result = desugarClass(bytes, name, stats);
@@ -164,6 +217,19 @@ public class Java9ToJava8Desugarer {
                     System.err.println("Warning: backport-classes-dir not found: " + backportDir);
                 }
             }
+        } finally {
+            if (previousOutputJar != null) {
+                previousOutputJar.close();
+            }
+            if (previousOutputSnapshot != null && previousOutputSnapshot.exists()) {
+                if (!previousOutputSnapshot.delete()) {
+                    previousOutputSnapshot.deleteOnExit();
+                }
+            }
+        }
+
+        if (incremental.enabled) {
+            saveCache(incremental.cacheFile, input, output, currentHashes);
         }
     }
 
@@ -249,6 +315,28 @@ public class Java9ToJava8Desugarer {
         return baos.toByteArray();
     }
 
+    private static File createOutputSnapshot(File output, File cacheFile) throws IOException {
+        File parent = cacheFile != null ? cacheFile.getParentFile() : null;
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            System.err.println("Warning: unable to create cache dir: " + parent.getAbsolutePath());
+            parent = null;
+        }
+        File snapshot = File.createTempFile(output.getName(), ".prev", parent);
+        copyFile(output, snapshot);
+        return snapshot;
+    }
+
+    private static void copyFile(File source, File target) throws IOException {
+        try (InputStream is = new FileInputStream(source);
+             OutputStream os = new FileOutputStream(target)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = is.read(buffer)) != -1) {
+                os.write(buffer, 0, read);
+            }
+        }
+    }
+
     // ────────────────────────────────────────────────────────────────────────
     //  Helper value types
     // ────────────────────────────────────────────────────────────────────────
@@ -265,5 +353,155 @@ public class Java9ToJava8Desugarer {
         public int apiCallsRemapped;
         public int privateIfaceMethods;
         public int otherEntries;
+        public int entriesReused;
+    }
+
+    private static class Options {
+        String inputPath;
+        String outputPath;
+        String backportDir;
+        boolean incremental;
+        boolean showHelp;
+        File cacheDir = new File("build/.desugar-cache");
+        File cacheFile;
+    }
+
+    public static class IncrementalConfig {
+        public final boolean enabled;
+        public final File cacheFile;
+
+        IncrementalConfig(boolean enabled, File cacheFile) {
+            this.enabled = enabled;
+            this.cacheFile = cacheFile;
+        }
+    }
+
+    private static Options parseArgs(String[] args) {
+        Options options = new Options();
+        List<String> positional = new ArrayList<>();
+        for (int i = 0; i < args.length; i++) {
+            String arg = args[i];
+            if ("--help".equals(arg) || "-h".equals(arg)) {
+                options.showHelp = true;
+                return options;
+            }
+            if ("--incremental".equals(arg)) {
+                options.incremental = true;
+                continue;
+            }
+            if ("--cache-dir".equals(arg)) {
+                if (i + 1 >= args.length) {
+                    System.err.println("Missing value for --cache-dir");
+                    return null;
+                }
+                options.cacheDir = new File(args[++i]);
+                continue;
+            }
+            if (arg.startsWith("--")) {
+                System.err.println("Unknown option: " + arg);
+                return null;
+            }
+            positional.add(arg);
+        }
+
+        if (positional.size() < 2 || positional.size() > 3) {
+            return null;
+        }
+        options.inputPath = positional.get(0);
+        options.outputPath = positional.get(1);
+        options.backportDir = positional.size() == 3 ? positional.get(2) : null;
+        String outputName = new File(options.outputPath).getName();
+        options.cacheFile = new File(options.cacheDir, outputName + CACHE_FILE_SUFFIX);
+        return options;
+    }
+
+    private static void printUsage() {
+        System.err.println(
+            "Usage: java desugarer.Java9ToJava8Desugarer [--incremental] [--cache-dir <dir>] <input.jar> <output.jar> [backport-classes-dir]");
+        System.err.println();
+        System.err.println("  <input.jar>            Java 9-compiled JAR to desugar");
+        System.err.println("  <output.jar>           Java 8-compatible output JAR");
+        System.err.println("  [backport-classes-dir] Optional directory that contains compiled");
+        System.err.println("                         j9compat/*.class backport files to bundle");
+        System.err.println();
+        System.err.println("  --incremental          Enable incremental mode (reuses unchanged output entries)");
+        System.err.println("  --cache-dir <dir>      Cache directory (default: build/.desugar-cache)");
+    }
+
+    private static void requireTemurinRuntime() {
+        String vendor = System.getProperty("java.vendor", "");
+        String runtime = System.getProperty("java.runtime.name", "");
+        String vmVendor = System.getProperty("java.vm.vendor", "");
+        String vmName = System.getProperty("java.vm.name", "");
+        String combined = (vendor + " " + runtime + " " + vmVendor + " " + vmName)
+                .toLowerCase(Locale.ROOT);
+        if (!combined.contains("temurin") && !combined.contains("adoptium")) {
+            System.err.println("Unsupported Java runtime detected.");
+            System.err.println("This tool is supported only on Eclipse Temurin (Adoptium).");
+            System.err.println("Detected: " + vendor + " / " + runtime + " / " + vmVendor);
+            System.exit(1);
+        }
+    }
+
+    private static Map<String, String> loadCache(File cacheFile, File input, File output) {
+        if (!cacheFile.isFile()) {
+            return Collections.emptyMap();
+        }
+        Properties props = new Properties();
+        try (InputStream is = new FileInputStream(cacheFile)) {
+            props.load(is);
+        } catch (IOException e) {
+            System.err.println("Warning: failed to read cache file: " + cacheFile.getAbsolutePath());
+            return Collections.emptyMap();
+        }
+        String version = props.getProperty(CACHE_VERSION_KEY);
+        String cachedInput = props.getProperty(CACHE_INPUT_KEY);
+        String cachedOutput = props.getProperty(CACHE_OUTPUT_KEY);
+        if (!CACHE_VERSION.equals(version)
+                || !input.getAbsolutePath().equals(cachedInput)
+                || !output.getAbsolutePath().equals(cachedOutput)) {
+            return Collections.emptyMap();
+        }
+        Map<String, String> hashes = new HashMap<>();
+        for (String key : props.stringPropertyNames()) {
+            if (key.startsWith("__")) {
+                continue;
+            }
+            hashes.put(key, props.getProperty(key));
+        }
+        return hashes;
+    }
+
+    private static void saveCache(File cacheFile, File input, File output,
+                                  Map<String, String> hashes) throws IOException {
+        File parent = cacheFile.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            System.err.println("Warning: unable to create cache dir: " + parent.getAbsolutePath());
+        }
+        Properties props = new Properties();
+        props.setProperty(CACHE_VERSION_KEY, CACHE_VERSION);
+        props.setProperty(CACHE_INPUT_KEY, input.getAbsolutePath());
+        props.setProperty(CACHE_OUTPUT_KEY, output.getAbsolutePath());
+        for (Map.Entry<String, String> entry : hashes.entrySet()) {
+            props.setProperty(entry.getKey(), entry.getValue());
+        }
+        try (OutputStream os = new FileOutputStream(cacheFile)) {
+            props.store(os, "Desugarer incremental cache");
+        }
+    }
+
+    private static String sha256(byte[] bytes) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(bytes);
+            StringBuilder sb = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                sb.append(Character.forDigit((b >> 4) & 0xF, 16));
+                sb.append(Character.forDigit(b & 0xF, 16));
+            }
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
     }
 }
