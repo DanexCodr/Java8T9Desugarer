@@ -113,7 +113,9 @@ public class SubmissionPublisher<T> implements Flow.Publisher<T>, AutoCloseable 
     }
 
     public void closeExceptionally(Throwable error) {
-        closedException = error == null ? new NullPointerException("error") : error;
+        closedException = error == null
+                ? new NullPointerException("error parameter cannot be null")
+                : error;
         closed = true;
         for (BufferedSubscription<T> subscription : subscribers) {
             subscription.signalClose(closedException);
@@ -257,7 +259,8 @@ public class SubmissionPublisher<T> implements Flow.Publisher<T>, AutoCloseable 
         public void request(long n) {
             if (n <= 0) {
                 cancel();
-                subscriber.onError(new IllegalArgumentException("non-positive subscription request"));
+                subscriber.onError(new IllegalArgumentException(
+                        "subscription request must be positive, got: " + n));
                 return;
             }
             synchronized (this) {

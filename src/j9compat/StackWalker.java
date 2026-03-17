@@ -208,7 +208,8 @@ public final class StackWalker {
                 match = resolveViaReflection(className, loader, methodName);
             }
             if (match == null) {
-                throw new IllegalStateException("Cannot resolve descriptor for " + element);
+                throw new IllegalStateException("Cannot resolve descriptor for " + element
+                        + " (debug info may be missing or method is overloaded)");
             }
             return match.descriptor;
         }
@@ -262,7 +263,7 @@ public final class StackWalker {
                 }
                 in.readUnsignedShort(); // minor
                 in.readUnsignedShort(); // major
-                String[] utf8 = readConstantPool(in);
+                String[] utf8 = readConstantPool(in, className);
                 in.readUnsignedShort(); // access
                 in.readUnsignedShort(); // this
                 in.readUnsignedShort(); // super
@@ -285,7 +286,7 @@ public final class StackWalker {
             }
         }
 
-        private static String[] readConstantPool(DataInputStream in) throws IOException {
+        private static String[] readConstantPool(DataInputStream in, String className) throws IOException {
             int count = in.readUnsignedShort();
             String[] utf8 = new String[count];
             for (int i = 1; i < count; i++) {
@@ -323,7 +324,7 @@ public final class StackWalker {
                         in.readUnsignedShort();
                         break;
                     default:
-                        throw new IOException("Unknown constant pool tag " + tag);
+                        throw new IOException("Unknown constant pool tag " + tag + " in " + className);
                 }
             }
             return utf8;
