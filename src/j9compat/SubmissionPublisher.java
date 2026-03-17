@@ -114,7 +114,7 @@ public class SubmissionPublisher<T> implements Flow.Publisher<T>, AutoCloseable 
 
     public void closeExceptionally(Throwable error) {
         closedException = error == null
-                ? new NullPointerException("error parameter cannot be null")
+                ? new NullPointerException("closeExceptionally() requires non-null error parameter")
                 : error;
         closed = true;
         for (BufferedSubscription<T> subscription : subscribers) {

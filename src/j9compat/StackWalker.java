@@ -187,6 +187,7 @@ public final class StackWalker {
 
     private static final class MethodDescriptorResolver {
         private static final int CACHE_LIMIT = 256;
+        private static final int CLASS_FILE_MAGIC = 0xCAFEBABE;
         private static final Map<String, List<MethodInfo>> CACHE = Collections.synchronizedMap(
                 new LinkedHashMap<String, List<MethodInfo>>(CACHE_LIMIT, 0.75f, true) {
                     @Override
@@ -209,7 +210,7 @@ public final class StackWalker {
             }
             if (match == null) {
                 throw new IllegalStateException("Cannot resolve descriptor for " + element
-                        + " (debug info may be missing or method is overloaded)");
+                        + " (compile with -g for debug info, or method may be overloaded)");
             }
             return match.descriptor;
         }
@@ -258,7 +259,7 @@ public final class StackWalker {
             }
             try (InputStream rawStream = raw;
                  DataInputStream in = new DataInputStream(new BufferedInputStream(rawStream))) {
-                if (in.readInt() != 0xCAFEBABE) {
+                if (in.readInt() != CLASS_FILE_MAGIC) {
                     return Collections.emptyList();
                 }
                 in.readUnsignedShort(); // minor
@@ -324,7 +325,8 @@ public final class StackWalker {
                         in.readUnsignedShort();
                         break;
                     default:
-                        throw new IOException("Unknown constant pool tag " + tag + " in " + className);
+                        throw new IOException("Unknown constant pool tag " + tag + " in "
+                                + className + " (expected 1-20)");
                 }
             }
             return utf8;

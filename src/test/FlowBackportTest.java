@@ -15,7 +15,7 @@ import static test.BackportTestRunner.*;
 public final class FlowBackportTest {
 
     private static final int PUBLISHER_BUFFER_SIZE = 16;
-    private static final int MIN_BUFFER_SIZE = 1;
+    private static final int OVERFLOW_TEST_BUFFER_SIZE = 1;
 
     static void run() {
         section("FlowBackport");
@@ -104,7 +104,7 @@ public final class FlowBackportTest {
 
     private static void testSubmissionPublisherDrop() {
         SubmissionPublisher<String> publisher = new SubmissionPublisher<String>(
-                new DirectExecutor(), MIN_BUFFER_SIZE);
+                new DirectExecutor(), OVERFLOW_TEST_BUFFER_SIZE);
         final int[] drops = {0};
 
         HoldingSubscriber<String> subscriber = new HoldingSubscriber<String>();
