@@ -120,7 +120,8 @@ public class Java9ToJava8Desugarer {
 
         Stats stats = new Stats();
         IncrementalConfig incremental = new IncrementalConfig(options.incremental, options.cacheFile);
-        desugarJar(inputFile, new File(outputPath), backportDir, stats, incremental);
+        desugarJar(inputFile, new File(outputPath), backportDir, stats, incremental,
+                options.classpathEntries);
 
         System.out.println();
         System.out.println("── Summary ──────────────────────────────");
@@ -142,7 +143,8 @@ public class Java9ToJava8Desugarer {
 
     public static void desugarJar(File input, File output,
                                   String backportDir, Stats stats,
-                                  IncrementalConfig incremental) throws Exception {
+                                  IncrementalConfig incremental,
+                                  List<File> classpathEntries) throws Exception {
 
         Set<String> written = new HashSet<>();
         Map<String, String> previousHashes = Collections.emptyMap();
@@ -163,7 +165,7 @@ public class Java9ToJava8Desugarer {
         try (JarFile jarFile = new JarFile(input);
              JarOutputStream jos = new JarOutputStream(
                      new BufferedOutputStream(new FileOutputStream(output)))) {
-            ClassHierarchy hierarchy = buildHierarchy(jarFile);
+            ClassHierarchy hierarchy = buildHierarchy(jarFile, classpathEntries);
 
             // 1. Transform all entries from the input JAR
             Enumeration<JarEntry> entries = jarFile.entries();
@@ -239,8 +241,42 @@ public class Java9ToJava8Desugarer {
     //  Class transformation
     // ────────────────────────────────────────────────────────────────────────
 
-    private static ClassHierarchy buildHierarchy(JarFile jarFile) throws IOException {
+    private static ClassHierarchy buildHierarchy(JarFile jarFile,
+                                                 List<File> classpathEntries) throws IOException {
         ClassHierarchy hierarchy = new ClassHierarchy();
+        recordClassesFromJar(hierarchy, jarFile);
+        if (classpathEntries != null) {
+            for (File entry : classpathEntries) {
+                if (entry == null) {
+                    continue;
+                }
+                if (!entry.exists()) {
+                    System.err.println("Warning: classpath entry not found: "
+                            + entry.getAbsolutePath());
+                    continue;
+                }
+                if (entry.isDirectory()) {
+                    recordClassesFromDirectory(hierarchy, entry, entry);
+                    continue;
+                }
+                if (entry.isFile() && entry.getName().endsWith(".jar")) {
+                    try (JarFile dependencyJar = new JarFile(entry)) {
+                        recordClassesFromJar(hierarchy, dependencyJar);
+                    } catch (IOException e) {
+                        System.err.println("Warning: unable to read classpath jar: "
+                                + entry.getAbsolutePath() + " (" + e.getMessage() + ")");
+                    }
+                    continue;
+                }
+                System.err.println("Warning: classpath entry is not a directory or jar: "
+                        + entry.getAbsolutePath());
+            }
+        }
+        return hierarchy;
+    }
+
+    private static void recordClassesFromJar(ClassHierarchy hierarchy,
+                                             JarFile jarFile) throws IOException {
         Enumeration<JarEntry> entries = jarFile.entries();
         while (entries.hasMoreElements()) {
             JarEntry entry = entries.nextElement();
@@ -250,20 +286,53 @@ public class Java9ToJava8Desugarer {
             }
             try (InputStream is = jarFile.getInputStream(entry)) {
                 byte[] bytes = readAllBytes(is);
-                ClassReader cr = new ClassReader(bytes);
-                cr.accept(new ClassVisitor(Opcodes.ASM9) {
-                    @Override
-                    public void visit(int version, int access, String className,
-                                      String signature, String superName,
-                                      String[] interfaces) {
-                        if (!"module-info".equals(className)) {
-                            hierarchy.record(className, superName, interfaces);
-                        }
-                    }
-                }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                recordClassBytes(hierarchy, bytes, name);
             }
         }
-        return hierarchy;
+    }
+
+    private static void recordClassesFromDirectory(ClassHierarchy hierarchy,
+                                                   File root,
+                                                   File dir) throws IOException {
+        File[] entries = dir.listFiles();
+        if (entries == null) {
+            return;
+        }
+        for (File entry : entries) {
+            if (entry.isDirectory()) {
+                recordClassesFromDirectory(hierarchy, root, entry);
+                continue;
+            }
+            if (!entry.getName().endsWith(".class")) {
+                continue;
+            }
+            String relativeName = root.toURI().relativize(entry.toURI()).getPath();
+            try (InputStream is = new FileInputStream(entry)) {
+                byte[] bytes = readAllBytes(is);
+                recordClassBytes(hierarchy, bytes, relativeName);
+            }
+        }
+    }
+
+    private static void recordClassBytes(ClassHierarchy hierarchy,
+                                         byte[] bytes,
+                                         String sourceName) {
+        try {
+            ClassReader cr = new ClassReader(bytes);
+            cr.accept(new ClassVisitor(Opcodes.ASM9) {
+                @Override
+                public void visit(int version, int access, String className,
+                                  String signature, String superName,
+                                  String[] interfaces) {
+                    if (!"module-info".equals(className)) {
+                        hierarchy.record(className, superName, interfaces);
+                    }
+                }
+            }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        } catch (Exception e) {
+            System.err.println("Warning: unable to read class hierarchy info for "
+                    + sourceName + " (" + e.getMessage() + ")");
+        }
     }
 
     public static ClassTransformResult desugarClass(byte[] classBytes,
@@ -409,6 +478,7 @@ public class Java9ToJava8Desugarer {
         boolean showHelp;
         File cacheDir = new File(DEFAULT_CACHE_DIR);
         File cacheFile;
+        List<File> classpathEntries = Collections.emptyList();
     }
 
     private static class IncrementalConfig {
@@ -442,6 +512,14 @@ public class Java9ToJava8Desugarer {
                 options.cacheDir = new File(args[++i]);
                 continue;
             }
+            if ("--class-path".equals(arg) || "--classpath".equals(arg)) {
+                if (i + 1 >= args.length) {
+                    System.err.println("Missing value for --class-path");
+                    return null;
+                }
+                options.classpathEntries = parseClassPath(args[++i]);
+                continue;
+            }
             if (arg.startsWith("--")) {
                 System.err.println("Unknown option: " + arg);
                 return null;
@@ -462,7 +540,7 @@ public class Java9ToJava8Desugarer {
 
     private static void printUsage() {
         System.err.println(
-            "Usage: java desugarer.Java9ToJava8Desugarer [--incremental] [--cache-dir <dir>] <input.jar> <output.jar> [backport-classes-dir]");
+            "Usage: java desugarer.Java9ToJava8Desugarer [--incremental] [--cache-dir <dir>] [--class-path <path>] <input.jar> <output.jar> [backport-classes-dir]");
         System.err.println();
         System.err.println("  <input.jar>            Java 9-compiled JAR to desugar");
         System.err.println("  <output.jar>           Java 8-compatible output JAR");
@@ -471,6 +549,23 @@ public class Java9ToJava8Desugarer {
         System.err.println();
         System.err.println("  --incremental          Enable incremental mode (reuses unchanged output entries)");
         System.err.println("  --cache-dir <dir>      Cache directory (default: build/.desugar-cache)");
+        System.err.println("  --class-path <path>    Extra classpath entries (jar/dir, separated by "
+                + File.pathSeparator + ") used to resolve InputStream subclasses");
+    }
+
+    private static List<File> parseClassPath(String classPath) {
+        if (classPath == null || classPath.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        String[] entries = classPath.split(java.util.regex.Pattern.quote(File.pathSeparator));
+        List<File> files = new ArrayList<>();
+        for (String entry : entries) {
+            String trimmed = entry.trim();
+            if (!trimmed.isEmpty()) {
+                files.add(new File(trimmed));
+            }
+        }
+        return files;
     }
 
     private static void requireTemurinRuntime() {

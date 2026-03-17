@@ -14,6 +14,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   entries.
 - Made `ProcessHandle` avoid direct `java.lang.management` dependencies for
   Android compatibility.
+- Added a `--class-path` option so the desugarer can resolve `InputStream`
+  subclasses from dependency jars/directories when remapping Java 9 stream IO
+  calls.
 
 ---
 
