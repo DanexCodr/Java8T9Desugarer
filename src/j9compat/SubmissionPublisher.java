@@ -20,7 +20,6 @@ import java.util.function.Consumer;
 public class SubmissionPublisher<T> implements Flow.Publisher<T>, AutoCloseable {
 
     static final int MAX_BUFFER_CAPACITY = 1 << 30;
-    static final int INITIAL_CAPACITY = 16;
 
     private final CopyOnWriteArrayList<BufferedSubscription<T>> subscribers =
             new CopyOnWriteArrayList<BufferedSubscription<T>>();
@@ -242,7 +241,7 @@ public class SubmissionPublisher<T> implements Flow.Publisher<T>, AutoCloseable 
     private static final class BufferedSubscription<T> implements Flow.Subscription {
         private final Flow.Subscriber<? super T> subscriber;
         private final SubmissionPublisher<T> publisher;
-        private final ArrayDeque<T> queue = new ArrayDeque<T>(INITIAL_CAPACITY);
+        private final ArrayDeque<T> queue = new ArrayDeque<T>();
         private volatile long demand;
         private volatile boolean cancelled;
         private volatile boolean closing;

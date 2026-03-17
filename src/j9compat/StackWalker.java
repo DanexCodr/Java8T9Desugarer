@@ -326,7 +326,7 @@ public final class StackWalker {
                         break;
                     default:
                         throw new IOException("Unknown constant pool tag " + tag + " in "
-                                + className + " (expected 1-20)");
+                                + className + " (expected supported tags 1,3-12,15-20)");
                 }
             }
             return utf8;
