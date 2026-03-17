@@ -4,6 +4,9 @@ A bytecode-level tool that transforms a JAR compiled with **Java 9** into a
 fully **Java 8-compatible** JAR, including a bundled runtime backport library
 (`j9compat`) that provides Java 8 implementations of every Java 9 API used.
 
+**Compatibility focus:** runs on **Eclipse Temurin (Adoptium)** and targets
+**Android 11–15 (API 30–34)** deployments with Java 9 bytecode input.
+
 ---
 
 ## What it does
@@ -116,7 +119,7 @@ jar cfe build/desugar9to8.jar desugarer.Java9ToJava8Desugarer -C build/fatjar .
 ## Usage
 
 ```
-java -jar build/desugar9to8.jar <input-java9.jar> <output-java8.jar> [backport-classes-dir]
+java -jar build/desugar9to8.jar [--incremental] [--cache-dir <dir>] <input-java9.jar> <output-java8.jar> [backport-classes-dir]
 ```
 
 | Argument | Description |
@@ -124,6 +127,8 @@ java -jar build/desugar9to8.jar <input-java9.jar> <output-java8.jar> [backport-c
 | `<input-java9.jar>` | JAR compiled with Java 9 (class version 53). |
 | `<output-java8.jar>` | Path for the Java 8-compatible output JAR. |
 | `[backport-classes-dir]` | Optional: directory containing compiled `j9compat/*.class` files. If provided, the backport classes are bundled into the output JAR. |
+| `--incremental` | Enable incremental mode (reuse unchanged output entries). |
+| `--cache-dir <dir>` | Cache directory for incremental mode (default: `build/.desugar-cache`). |
 
 ### Example
 
@@ -138,6 +143,18 @@ The output JAR will:
 - Have all class files at version 52 (Java 8).
 - Contain the `j9compat.*` backport classes.
 - Redirect every Java 9 API call to the corresponding backport method.
+
+### Incremental mode
+
+Incremental mode reuses the output bytes for unchanged JAR entries and writes
+an on-disk cache alongside the output.
+
+```bash
+java -jar build/desugar9to8.jar --incremental --cache-dir build/.desugar-cache \
+  my-app-java9.jar \
+  my-app-java8.jar \
+  build/backport
+```
 
 ---
 

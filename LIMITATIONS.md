@@ -45,6 +45,9 @@ be migrated manually.
   `parent()`, `children()`, and `descendants()` return empty results. The
   `info()` payload only includes best-effort values (command line, start time,
   and user where available).
+- **Android runtime metadata is best-effort** – When `java.lang.management`
+  classes are unavailable (Android 11–15), `ProcessHandle` falls back to
+  reflective checks and may report unknown PIDs or missing start times.
 - **`StackWalker` uses stack traces** – Frames are derived from
   `Thread.getStackTrace()` and do not expose hidden frames or bytecode indices.
   `StackFrame.getDeclaringClass()` requires
