@@ -24,6 +24,27 @@ public final class BackportRemapper extends Remapper {
         TYPE_MAP.put("java/util/concurrent/Flow$Subscription", "j9compat/Flow$Subscription");
         TYPE_MAP.put("java/util/concurrent/Flow$Processor", "j9compat/Flow$Processor");
         TYPE_MAP.put("java/util/concurrent/SubmissionPublisher", "j9compat/SubmissionPublisher");
+        TYPE_MAP.put("java/lang/Module", "j9compat/Module");
+        TYPE_MAP.put("java/lang/ModuleLayer", "j9compat/ModuleLayer");
+        TYPE_MAP.put("java/lang/ModuleLayer$Controller", "j9compat/ModuleLayer$Controller");
+        TYPE_MAP.put("java/lang/module/ModuleDescriptor", "j9compat/ModuleDescriptor");
+        TYPE_MAP.put("java/lang/module/ModuleDescriptor$Builder", "j9compat/ModuleDescriptor$Builder");
+        TYPE_MAP.put("java/lang/module/ModuleDescriptor$Modifier", "j9compat/ModuleDescriptor$Modifier");
+        TYPE_MAP.put("java/lang/module/ModuleDescriptor$Requires", "j9compat/ModuleDescriptor$Requires");
+        TYPE_MAP.put("java/lang/module/ModuleDescriptor$Requires$Modifier", "j9compat/ModuleDescriptor$Requires$Modifier");
+        TYPE_MAP.put("java/lang/module/ModuleDescriptor$Exports", "j9compat/ModuleDescriptor$Exports");
+        TYPE_MAP.put("java/lang/module/ModuleDescriptor$Exports$Modifier", "j9compat/ModuleDescriptor$Exports$Modifier");
+        TYPE_MAP.put("java/lang/module/ModuleDescriptor$Opens", "j9compat/ModuleDescriptor$Opens");
+        TYPE_MAP.put("java/lang/module/ModuleDescriptor$Opens$Modifier", "j9compat/ModuleDescriptor$Opens$Modifier");
+        TYPE_MAP.put("java/lang/module/ModuleDescriptor$Provides", "j9compat/ModuleDescriptor$Provides");
+        TYPE_MAP.put("java/lang/module/ModuleDescriptor$Version", "j9compat/ModuleDescriptor$Version");
+        TYPE_MAP.put("java/lang/module/Configuration", "j9compat/Configuration");
+        TYPE_MAP.put("java/lang/module/ModuleFinder", "j9compat/ModuleFinder");
+        TYPE_MAP.put("java/lang/module/ModuleReference", "j9compat/ModuleReference");
+        TYPE_MAP.put("java/lang/module/ModuleReader", "j9compat/ModuleReader");
+        TYPE_MAP.put("java/lang/module/ResolvedModule", "j9compat/ResolvedModule");
+        TYPE_MAP.put("java/lang/invoke/VarHandle", "j9compat/VarHandle");
+        TYPE_MAP.put("java/lang/invoke/VarHandle$AccessMode", "j9compat/VarHandle$AccessMode");
     }
 
     @Override

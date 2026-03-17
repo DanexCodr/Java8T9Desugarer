@@ -39,6 +39,8 @@ import java.util.jar.*;
  *    completeOnTimeout, failedFuture, completedStage, failedStage,
  *    minimalCompletionStage, newIncompleteFuture, copy)
  *  - java.lang.ProcessHandle / StackWalker / Flow (rewritten to j9compat types)
+ *  - module system APIs (Class.getModule, Module/ModuleLayer descriptor types)
+ *  - VarHandle lookups (MethodHandles.Lookup.findVarHandle, arrayElementVarHandle)
  *
  * Usage:
  *   java -cp desugar9to8.jar:asm-9.4.jar:asm-commons-9.4.jar:asm-tree-9.4.jar \
@@ -81,6 +83,32 @@ public class Java9ToJava8Desugarer {
         "j9compat/StackWalker.class",
         "j9compat/StackWalker$Option.class",
         "j9compat/StackWalker$StackFrame.class",
+        "j9compat/ModuleBackport.class",
+        "j9compat/Module.class",
+        "j9compat/ModuleLayer.class",
+        "j9compat/ModuleLayer$Controller.class",
+        "j9compat/ModuleDescriptor.class",
+        "j9compat/ModuleDescriptor$Builder.class",
+        "j9compat/ModuleDescriptor$Modifier.class",
+        "j9compat/ModuleDescriptor$Requires.class",
+        "j9compat/ModuleDescriptor$Requires$Modifier.class",
+        "j9compat/ModuleDescriptor$Exports.class",
+        "j9compat/ModuleDescriptor$Exports$Modifier.class",
+        "j9compat/ModuleDescriptor$Opens.class",
+        "j9compat/ModuleDescriptor$Opens$Modifier.class",
+        "j9compat/ModuleDescriptor$Provides.class",
+        "j9compat/ModuleDescriptor$Version.class",
+        "j9compat/Configuration.class",
+        "j9compat/ModuleFinder.class",
+        "j9compat/ModuleReference.class",
+        "j9compat/ModuleReader.class",
+        "j9compat/ResolvedModule.class",
+        "j9compat/VarHandle.class",
+        "j9compat/VarHandle$AccessMode.class",
+        "j9compat/BackportMappings.class",
+        "j9compat/ReflectionBackport.class",
+        "j9compat/MethodHandlesBackport.class",
+        "j9compat/PrivateInterfaceAccess.class",
     };
 
     // ────────────────────────────────────────────────────────────────────────

@@ -49,6 +49,10 @@ import java.util.List;
  *       {@code CompletableFuture.failedStage},
  *       {@code CompletableFuture.minimalCompletionStage},
  *       {@code CompletableFuture.newIncompleteFuture}</li>
+ *   <li>{@code Class.getModule} (module system)</li>
+ *   <li>{@code MethodHandles.Lookup.findVarHandle},
+ *       {@code MethodHandles.Lookup.findStaticVarHandle},
+ *       {@code MethodHandles.arrayElementVarHandle}</li>
  * </ul>
  */
 public class MethodDesugarer extends LocalVariablesSorter {
@@ -68,6 +72,9 @@ public class MethodDesugarer extends LocalVariablesSorter {
     private static final String BP_CF          = "j9compat/CompletableFutureBackport";
     private static final String BP_COLLECTORS  = "j9compat/CollectorsBackport";
     private static final String BP_PROCESS_HANDLE = "j9compat/ProcessHandle";
+    private static final String BP_MODULE_BACKPORT = "j9compat/ModuleBackport";
+    private static final String BP_REFLECTION = "j9compat/ReflectionBackport";
+    private static final String BP_METHOD_HANDLES = "j9compat/MethodHandlesBackport";
 
     private final Java9ToJava8Desugarer.Stats stats;
     private final ClassHierarchy hierarchy;
@@ -330,6 +337,72 @@ public class MethodDesugarer extends LocalVariablesSorter {
                     "java/lang/Process", descriptor); return;
         }
 
+        // ── java.lang.Class additions (module system) ─────────────────────────
+        if ("java/lang/Class".equals(owner) && "getModule".equals(name)
+                && "()Ljava/lang/Module;".equals(descriptor)) {
+            remapInstanceToStatic(BP_MODULE_BACKPORT, "getModule",
+                    "java/lang/Class", descriptor); return;
+        }
+
+        // ── java.lang.Class reflection lookups ───────────────────────────────
+        if ("java/lang/Class".equals(owner)) {
+            if ("getMethod".equals(name)) {
+                remapInstanceToStatic(BP_REFLECTION, "getMethod",
+                        "java/lang/Class", descriptor); return;
+            }
+            if ("getDeclaredMethod".equals(name)) {
+                remapInstanceToStatic(BP_REFLECTION, "getDeclaredMethod",
+                        "java/lang/Class", descriptor); return;
+            }
+            if ("getMethods".equals(name)) {
+                remapInstanceToStatic(BP_REFLECTION, "getMethods",
+                        "java/lang/Class", descriptor); return;
+            }
+            if ("getDeclaredMethods".equals(name)) {
+                remapInstanceToStatic(BP_REFLECTION, "getDeclaredMethods",
+                        "java/lang/Class", descriptor); return;
+            }
+        }
+
+        // ── java.lang.reflect.Method invocation ──────────────────────────────
+        if ("java/lang/reflect/Method".equals(owner) && "invoke".equals(name)) {
+            remapInstanceToStatic(BP_REFLECTION, "invoke",
+                    "java/lang/reflect/Method", descriptor); return;
+        }
+
+        // ── MethodHandles.Lookup lookups ─────────────────────────────────────
+        if ("java/lang/invoke/MethodHandles$Lookup".equals(owner)) {
+            if ("findVirtual".equals(name)) {
+                remapInstanceToStatic(BP_METHOD_HANDLES, "findVirtual",
+                        "java/lang/invoke/MethodHandles$Lookup", descriptor); return;
+            }
+            if ("findStatic".equals(name)) {
+                remapInstanceToStatic(BP_METHOD_HANDLES, "findStatic",
+                        "java/lang/invoke/MethodHandles$Lookup", descriptor); return;
+            }
+            if ("findSpecial".equals(name)) {
+                remapInstanceToStatic(BP_METHOD_HANDLES, "findSpecial",
+                        "java/lang/invoke/MethodHandles$Lookup", descriptor); return;
+            }
+            if ("findConstructor".equals(name)) {
+                remapInstanceToStatic(BP_METHOD_HANDLES, "findConstructor",
+                        "java/lang/invoke/MethodHandles$Lookup", descriptor); return;
+            }
+            if ("findVarHandle".equals(name)) {
+                remapInstanceToStatic(BP_METHOD_HANDLES, "findVarHandle",
+                        "java/lang/invoke/MethodHandles$Lookup", descriptor); return;
+            }
+            if ("findStaticVarHandle".equals(name)) {
+                remapInstanceToStatic(BP_METHOD_HANDLES, "findStaticVarHandle",
+                        "java/lang/invoke/MethodHandles$Lookup", descriptor); return;
+            }
+        }
+
+        if ("java/lang/invoke/MethodHandles".equals(owner)
+                && "arrayElementVarHandle".equals(name)) {
+            remap(BP_METHOD_HANDLES, "arrayElementVarHandle", descriptor); return;
+        }
+
         // No remapping needed – emit unchanged
         super.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
     }
@@ -428,10 +501,17 @@ public class MethodDesugarer extends LocalVariablesSorter {
             super.visitVarInsn(argTypes[i].getOpcode(Opcodes.ISTORE), locals[i]);
         }
 
+        int estimatedCapacity = estimateConcatCapacity(segments, argTypes);
         super.visitTypeInsn(Opcodes.NEW, "java/lang/StringBuilder");
         super.visitInsn(Opcodes.DUP);
-        super.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder",
-                "<init>", "()V", false);
+        if (estimatedCapacity > 0) {
+            super.visitLdcInsn(estimatedCapacity);
+            super.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder",
+                    "<init>", "(I)V", false);
+        } else {
+            super.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder",
+                    "<init>", "()V", false);
+        }
 
         for (ConcatSegment segment : segments) {
             if (segment.kind == ConcatSegmentKind.LITERAL) {
@@ -590,6 +670,57 @@ public class MethodDesugarer extends LocalVariablesSorter {
         }
         super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder",
                 "append", descriptor, false);
+    }
+
+    private int estimateConcatCapacity(List<ConcatSegment> segments, Type[] argTypes) {
+        int capacity = 0;
+        for (ConcatSegment segment : segments) {
+            if (segment.kind == ConcatSegmentKind.LITERAL && segment.literal != null) {
+                capacity += segment.literal.length();
+            } else if (segment.kind == ConcatSegmentKind.CONSTANT) {
+                capacity += estimateConstant(segment.constant);
+            } else if (segment.kind == ConcatSegmentKind.ARG) {
+                capacity += estimateType(argTypes[segment.index]);
+            }
+        }
+        return capacity;
+    }
+
+    private int estimateConstant(Object constant) {
+        if (constant == null) {
+            return 4;
+        }
+        if (constant instanceof String) {
+            return ((String) constant).length();
+        }
+        if (constant instanceof Number) {
+            return 16;
+        }
+        if (constant instanceof Character || constant instanceof Boolean) {
+            return 1;
+        }
+        return 16;
+    }
+
+    private int estimateType(Type type) {
+        switch (type.getSort()) {
+            case Type.BOOLEAN:
+                return 5;
+            case Type.CHAR:
+                return 1;
+            case Type.BYTE:
+            case Type.SHORT:
+            case Type.INT:
+                return 11;
+            case Type.FLOAT:
+                return 15;
+            case Type.LONG:
+                return 20;
+            case Type.DOUBLE:
+                return 24;
+            default:
+                return 16;
+        }
     }
 
     private enum ConcatSegmentKind {

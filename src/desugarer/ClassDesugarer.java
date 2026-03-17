@@ -22,6 +22,7 @@ public class ClassDesugarer extends ClassVisitor {
     private final Java9ToJava8Desugarer.Stats stats;
     private final ClassHierarchy hierarchy;
     private boolean isInterface;
+    private String className;
 
     public ClassDesugarer(ClassVisitor cv, Java9ToJava8Desugarer.Stats stats,
                           ClassHierarchy hierarchy) {
@@ -37,6 +38,7 @@ public class ClassDesugarer extends ClassVisitor {
                       String signature, String superName, String[] interfaces) {
 
         this.isInterface = (access & Opcodes.ACC_INTERFACE) != 0;
+        this.className = name;
 
         if (version > JAVA_8_VERSION) {
             System.out.println("  [VER  ]  " + name
@@ -58,10 +60,12 @@ public class ClassDesugarer extends ClassVisitor {
         // Java 9 allows private (and private static) interface methods.
         // Java 8 does not – remove the private flag to make them
         // package-private so the verifier accepts them.
+        boolean wasPrivateInterface = false;
         if (isInterface && (access & Opcodes.ACC_PRIVATE) != 0) {
             System.out.println("  [IPRV ]  private interface method made package-private: "
                     + name + descriptor);
             stats.privateIfaceMethods++;
+            wasPrivateInterface = true;
             access &= ~Opcodes.ACC_PRIVATE;   // clear ACC_PRIVATE
             // Keep ACC_STATIC if present; otherwise it stays a virtual method
         }
@@ -70,6 +74,36 @@ public class ClassDesugarer extends ClassVisitor {
                 signature, exceptions);
         if (mv == null) return null;
 
-        return new MethodDesugarer(access, descriptor, mv, stats, hierarchy);
+        MethodVisitor desugarer = new MethodDesugarer(access, descriptor, mv, stats, hierarchy);
+        if (wasPrivateInterface && (access & Opcodes.ACC_ABSTRACT) == 0) {
+            return new PrivateInterfaceGuardAdapter(desugarer, className);
+        }
+        return desugarer;
+    }
+
+    private static final class PrivateInterfaceGuardAdapter extends MethodVisitor {
+        private final String ownerInternalName;
+        private boolean visitedCode;
+
+        PrivateInterfaceGuardAdapter(MethodVisitor mv, String ownerInternalName) {
+            super(Opcodes.ASM9, mv);
+            this.ownerInternalName = ownerInternalName;
+        }
+
+        @Override
+        public void visitCode() {
+            if (!visitedCode) {
+                visitedCode = true;
+                super.visitCode();
+                super.visitLdcInsn(ownerInternalName);
+                super.visitMethodInsn(Opcodes.INVOKESTATIC,
+                        "j9compat/PrivateInterfaceAccess",
+                        "checkCaller",
+                        "(Ljava/lang/String;)V",
+                        false);
+                return;
+            }
+            super.visitCode();
+        }
     }
 }
