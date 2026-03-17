@@ -255,7 +255,8 @@ public final class StackWalker {
             if (raw == null) {
                 return Collections.emptyList();
             }
-            try (DataInputStream in = new DataInputStream(new BufferedInputStream(raw))) {
+            try (InputStream rawStream = raw;
+                 DataInputStream in = new DataInputStream(new BufferedInputStream(rawStream))) {
                 if (in.readInt() != 0xCAFEBABE) {
                     return Collections.emptyList();
                 }

@@ -241,11 +241,11 @@ public class SubmissionPublisher<T> implements Flow.Publisher<T>, AutoCloseable 
         private final Flow.Subscriber<? super T> subscriber;
         private final SubmissionPublisher<T> publisher;
         private final ArrayDeque<T> queue = new ArrayDeque<T>(INITIAL_CAPACITY);
-        private long demand;
-        private boolean cancelled;
-        private boolean closing;
-        private boolean draining;
-        private Throwable terminalError;
+        private volatile long demand;
+        private volatile boolean cancelled;
+        private volatile boolean closing;
+        private volatile boolean draining;
+        private volatile Throwable terminalError;
 
         private BufferedSubscription(Flow.Subscriber<? super T> subscriber,
                                      SubmissionPublisher<T> publisher) {
@@ -264,7 +264,7 @@ public class SubmissionPublisher<T> implements Flow.Publisher<T>, AutoCloseable 
                 if (cancelled) {
                     return;
                 }
-                if (demand + n < 0L) {
+                if (demand > Long.MAX_VALUE - n) {
                     demand = Long.MAX_VALUE;
                 } else {
                     demand += n;
@@ -297,7 +297,8 @@ public class SubmissionPublisher<T> implements Flow.Publisher<T>, AutoCloseable 
                     }
                     if (timeout > 0L && unit != null) {
                         try {
-                            unit.timedWait(this, timeout);
+                            long millis = unit.toMillis(timeout);
+                            this.wait(millis > 0L ? millis : 1L);
                         } catch (InterruptedException ignored) {
                             Thread.currentThread().interrupt();
                         }

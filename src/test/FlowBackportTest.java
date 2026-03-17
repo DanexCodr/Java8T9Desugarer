@@ -14,6 +14,9 @@ import static test.BackportTestRunner.*;
  */
 public final class FlowBackportTest {
 
+    private static final int PUBLISHER_BUFFER_SIZE = 16;
+    private static final int MIN_BUFFER_SIZE = 1;
+
     static void run() {
         section("FlowBackport");
 
@@ -62,7 +65,8 @@ public final class FlowBackportTest {
     }
 
     private static void testSubmissionPublisher() {
-        SubmissionPublisher<String> publisher = new SubmissionPublisher<String>(new DirectExecutor(), 16);
+        SubmissionPublisher<String> publisher = new SubmissionPublisher<String>(
+                new DirectExecutor(), PUBLISHER_BUFFER_SIZE);
         List<String> received = new ArrayList<String>();
         final boolean[] completed = {false};
 
@@ -99,7 +103,8 @@ public final class FlowBackportTest {
     }
 
     private static void testSubmissionPublisherDrop() {
-        SubmissionPublisher<String> publisher = new SubmissionPublisher<String>(new DirectExecutor(), 1);
+        SubmissionPublisher<String> publisher = new SubmissionPublisher<String>(
+                new DirectExecutor(), MIN_BUFFER_SIZE);
         final int[] drops = {0};
 
         HoldingSubscriber<String> subscriber = new HoldingSubscriber<String>();
