@@ -18,7 +18,7 @@ public final class StackWalkerBackportTest {
     static void run() {
         section("StackWalkerBackport");
 
-        testDescriptorCacheLimitProperty();
+        testCacheLimit();
         testWalk();
         testCallerClass();
         testForEach();
@@ -28,7 +28,7 @@ public final class StackWalkerBackportTest {
         testMaxDepth();
     }
 
-    private static void testDescriptorCacheLimitProperty() {
+    private static void testCacheLimit() {
         String property = "j9compat.stackwalker.cache.size";
         String original = System.getProperty(property);
         System.setProperty(property, "4");
@@ -59,7 +59,7 @@ public final class StackWalkerBackportTest {
             int cappedValue = (Integer) resolveMethod.invoke(null);
             assertEquals(65536, cappedValue,
                     "StackWalker descriptor cache limit: caps large values");
-        } catch (ReflectiveOperationException | SecurityException e) {
+        } catch (ReflectiveOperationException e) {
             fail("StackWalker descriptor cache limit: reflection failed (" + e.getClass().getSimpleName() + ")");
         } finally {
             if (original == null) {
