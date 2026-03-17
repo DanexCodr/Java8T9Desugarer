@@ -61,6 +61,10 @@ public final class BackportTestRunner {
         }
     }
 
+    public static void fail(String message) {
+        assertTrue(false, message);
+    }
+
     static void section(String name) {
         System.out.println("\n── " + name + " ──");
     }
@@ -80,6 +84,7 @@ public final class BackportTestRunner {
         IOBackportTest.run();
         CompletableFutureBackportTest.run();
         ProcessHandleBackportTest.run();
+        FlowBackportTest.run();
         StackWalkerBackportTest.run();
 
         System.out.println("\n=== Results ===");
