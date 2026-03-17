@@ -59,7 +59,7 @@ public final class ProcessHandleBackportTest {
                 assertTrue(inDescendants, "ProcessHandle.descendants: includes spawned process");
             }
         } catch (Exception e) {
-            assertTrue(false, "ProcessHandle child tracking threw exception: " + e.getMessage());
+            fail("ProcessHandle child tracking threw exception: " + e.getMessage());
         } finally {
             if (process != null) {
                 try {
@@ -79,7 +79,7 @@ public final class ProcessHandleBackportTest {
             handle.onExit().get(5, TimeUnit.SECONDS);
             assertTrue(!handle.isAlive(), "ProcessHandle.onExit: completes after process exit");
         } catch (Exception e) {
-            assertTrue(false, "ProcessHandle.onExit threw exception: " + e.getMessage());
+            fail("ProcessHandle.onExit threw exception: " + e.getMessage());
         } finally {
             if (process != null) {
                 try {

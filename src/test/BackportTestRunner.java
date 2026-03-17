@@ -61,6 +61,10 @@ public final class BackportTestRunner {
         }
     }
 
+    public static void fail(String message) {
+        assertTrue(false, message);
+    }
+
     static void section(String name) {
         System.out.println("\n── " + name + " ──");
     }

@@ -119,7 +119,7 @@ final class ProcessHandleImpl implements ProcessHandle {
         }
         long pid = processPid(process);
         ProcessHandleImpl handle = new ProcessHandleImpl(pid, process, false,
-                CURRENT.pid > 0 ? CURRENT : null);
+                currentParent());
         if (pid > 0) {
             HANDLES.put(pid, handle);
         }
@@ -271,6 +271,10 @@ final class ProcessHandleImpl implements ProcessHandle {
             }
         }
         return -1;
+    }
+
+    private static ProcessHandleImpl currentParent() {
+        return CURRENT.pid > 0 ? CURRENT : null;
     }
 
     private static long processPid(Process process) {
