@@ -28,12 +28,12 @@
   interface methods, so the desugarer strips `ACC_PRIVATE`. This makes those
   methods package-private, which can allow same-package access and changes
   reflection visibility.
-- **Classes that fail desugaring stay Java 9** – If ASM cannot transform a
+- **Classes that fail desugaring remain Java 9+ class files** – If ASM cannot transform a
   class (for example, due to missing dependencies needed to compute frames),
   the original class bytes are kept. The output JAR may still contain Java 9
   class files in that case.
 - **Reflection/MethodHandle lookups are not remapped** – The desugarer only
-  rewrites direct bytecode method invocations. Reflective or `MethodHandles`
+  rewrites direct bytecode method invocations. Reflective or `MethodHandle`
   lookups of Java 9 APIs will still resolve the original methods and need
   manual migration.
 
