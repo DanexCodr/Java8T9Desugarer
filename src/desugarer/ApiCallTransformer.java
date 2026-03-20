@@ -159,7 +159,8 @@ public final class ApiCallTransformer implements SourceTransformer {
         String updated = code;
         String replacementSimple = simpleName(replacementClass) + "." + replacementMethod + "(";
 
-        Pattern fqPattern = Pattern.compile("\\b" + Pattern.quote(fqn) + "\\s*\\.\\s*" + method + "\\s*\\(");
+        String quotedMethod = Pattern.quote(method);
+        Pattern fqPattern = Pattern.compile("\\b" + Pattern.quote(fqn) + "\\s*\\.\\s*" + quotedMethod + "\\s*\\(");
         Matcher fqMatcher = fqPattern.matcher(updated);
         if (fqMatcher.find()) {
             context.addImport(replacementClass);
@@ -167,7 +168,7 @@ public final class ApiCallTransformer implements SourceTransformer {
         }
 
         if (imports.isTypeImported(simpleName, fqn)) {
-            Pattern simplePattern = Pattern.compile("\\b" + simpleName + "\\s*\\.\\s*" + method + "\\s*\\(");
+            Pattern simplePattern = Pattern.compile("\\b" + simpleName + "\\s*\\.\\s*" + quotedMethod + "\\s*\\(");
             Matcher simpleMatcher = simplePattern.matcher(updated);
             if (simpleMatcher.find()) {
                 context.addImport(replacementClass);
@@ -176,7 +177,7 @@ public final class ApiCallTransformer implements SourceTransformer {
         }
 
         if (imports.hasStaticImport(fqn, method)) {
-            Pattern staticPattern = Pattern.compile("(?<![\\w.])" + method + "\\s*\\(");
+            Pattern staticPattern = Pattern.compile("(?<![\\w.])" + quotedMethod + "\\s*\\(");
             Matcher staticMatcher = staticPattern.matcher(updated);
             if (staticMatcher.find()) {
                 context.addImport(replacementClass);

@@ -101,10 +101,13 @@ public final class Java9SourceDesugarer {
 
     private static String defaultOutputPath(File input) {
         String name = input.getName();
+        File parent = input.getParentFile();
         if (name.endsWith(".java")) {
-            return new File(input.getParentFile(), name.substring(0, name.length() - 5) + ".java8.java").getPath();
+            String outputName = name.substring(0, name.length() - 5) + ".java8.java";
+            return parent == null ? outputName : new File(parent, outputName).getPath();
         }
-        return new File(input.getParentFile(), name + ".java8").getPath();
+        String outputName = name + ".java8";
+        return parent == null ? outputName : new File(parent, outputName).getPath();
     }
 
     private static String readFile(File input) throws IOException {

@@ -109,7 +109,7 @@ public final class ImportAnalyzer {
         if (lastImportEnd >= 0) {
             StringBuilder updated = new StringBuilder();
             updated.append(source, 0, lastImportEnd);
-            if (source.charAt(lastImportEnd - 1) != '\n') {
+            if (lastImportEnd > 0 && source.charAt(lastImportEnd - 1) != '\n') {
                 updated.append('\n');
             }
             updated.append(importBlock);

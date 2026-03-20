@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 public final class PrivateInterfaceMethodTransformer implements SourceTransformer {
     private static final Pattern INTERFACE_PATTERN = Pattern.compile("\\binterface\\b");
+    private static final String SELF_PARAM = "__j9_interface_self";
 
     @Override
     public String transform(String source, SourceContext context) {
@@ -191,20 +192,21 @@ public final class PrivateInterfaceMethodTransformer implements SourceTransforme
         return SourceDesugarer.transformCodeSegments(body, (code, context) -> {
             String rewritten = code;
             String qualified = helper + "." + methodName;
+            String quoted = Pattern.quote(methodName);
             if (selfArg == null) {
-                rewritten = rewritten.replaceAll("\\bthis\\s*\\.\\s*" + methodName + "\\s*\\(",
+                rewritten = rewritten.replaceAll("\\bthis\\s*\\.\\s*" + quoted + "\\s*\\(",
                         qualified + "(");
-                rewritten = rewritten.replaceAll("(?<![\\w.])" + methodName + "\\s*\\(",
+                rewritten = rewritten.replaceAll("(?<![\\w.])" + quoted + "\\s*\\(",
                         qualified + "(");
                 return rewritten;
             }
-            rewritten = rewritten.replaceAll("\\bthis\\s*\\.\\s*" + methodName + "\\s*\\(\\s*\\)",
+            rewritten = rewritten.replaceAll("\\bthis\\s*\\.\\s*" + quoted + "\\s*\\(\\s*\\)",
                     qualified + "(" + selfArg + ")");
-            rewritten = rewritten.replaceAll("\\bthis\\s*\\.\\s*" + methodName + "\\s*\\(",
+            rewritten = rewritten.replaceAll("\\bthis\\s*\\.\\s*" + quoted + "\\s*\\(",
                     qualified + "(" + selfArg + ", ");
-            rewritten = rewritten.replaceAll("(?<![\\w.])" + methodName + "\\s*\\(\\s*\\)",
+            rewritten = rewritten.replaceAll("(?<![\\w.])" + quoted + "\\s*\\(\\s*\\)",
                     qualified + "(" + selfArg + ")");
-            rewritten = rewritten.replaceAll("(?<![\\w.])" + methodName + "\\s*\\(",
+            rewritten = rewritten.replaceAll("(?<![\\w.])" + quoted + "\\s*\\(",
                     qualified + "(" + selfArg + ", ");
             return rewritten;
         }, null);
@@ -303,6 +305,128 @@ public final class PrivateInterfaceMethodTransformer implements SourceTransforme
         return -1;
     }
 
+    private static String replaceThisOutsideNestedTypes(String body, String replacement) {
+        StringBuilder out = new StringBuilder(body.length());
+        List<Boolean> stack = new ArrayList<>();
+        int typeDepth = 0;
+        boolean pendingType = false;
+        boolean pendingAnon = false;
+        boolean anonReady = false;
+        int parenDepth = 0;
+        boolean sawParen = false;
+
+        for (int i = 0; i < body.length(); ) {
+            if (isKeywordAt(body, i, "class")) {
+                pendingType = true;
+                out.append("class");
+                i += 5;
+                continue;
+            }
+            if (isKeywordAt(body, i, "interface")) {
+                pendingType = true;
+                out.append("interface");
+                i += 9;
+                continue;
+            }
+            if (isKeywordAt(body, i, "enum")) {
+                pendingType = true;
+                out.append("enum");
+                i += 4;
+                continue;
+            }
+            if (isKeywordAt(body, i, "new")) {
+                pendingAnon = true;
+                anonReady = false;
+                parenDepth = 0;
+                sawParen = false;
+                out.append("new");
+                i += 3;
+                continue;
+            }
+
+            char c = body.charAt(i);
+
+            if (pendingAnon) {
+                if (c == '(') {
+                    parenDepth++;
+                    sawParen = true;
+                } else if (c == ')' && sawParen) {
+                    parenDepth = Math.max(0, parenDepth - 1);
+                    if (parenDepth == 0) {
+                        anonReady = true;
+                        pendingAnon = false;
+                    }
+                } else if (c == ';') {
+                    pendingAnon = false;
+                    anonReady = false;
+                } else if (!sawParen && c == '{') {
+                    pendingAnon = false;
+                    anonReady = false;
+                } else if (!sawParen && c == ',') {
+                    pendingAnon = false;
+                    anonReady = false;
+                }
+            }
+
+            if (anonReady && !Character.isWhitespace(c)) {
+                if (c != '{') {
+                    anonReady = false;
+                }
+            }
+
+            if (c == '{') {
+                boolean isType = false;
+                if (pendingType) {
+                    isType = true;
+                    pendingType = false;
+                } else if (anonReady) {
+                    isType = true;
+                    anonReady = false;
+                }
+                stack.add(isType);
+                if (isType) {
+                    typeDepth++;
+                }
+            } else if (c == '}') {
+                if (!stack.isEmpty()) {
+                    boolean wasType = stack.remove(stack.size() - 1);
+                    if (wasType) {
+                        typeDepth = Math.max(0, typeDepth - 1);
+                    }
+                }
+                pendingType = false;
+                pendingAnon = false;
+                anonReady = false;
+                parenDepth = 0;
+                sawParen = false;
+            }
+
+            if (typeDepth == 0 && isKeywordAt(body, i, "this")) {
+                out.append(replacement);
+                i += 4;
+                continue;
+            }
+
+            out.append(c);
+            i++;
+        }
+        return out.toString();
+    }
+
+    private static boolean isKeywordAt(String text, int index, String keyword) {
+        int len = keyword.length();
+        if (index < 0 || index + len > text.length()) {
+            return false;
+        }
+        if (!text.regionMatches(index, keyword, 0, len)) {
+            return false;
+        }
+        boolean startOk = index == 0 || !Character.isJavaIdentifierPart(text.charAt(index - 1));
+        boolean endOk = index + len >= text.length()
+                || !Character.isJavaIdentifierPart(text.charAt(index + len));
+        return startOk && endOk;
+    }
+
     private static final class MethodBounds {
         final int startIndex;
         final int endIndex;
@@ -365,7 +489,7 @@ public final class PrivateInterfaceMethodTransformer implements SourceTransforme
 
             String newParams = params.trim();
             if (needsSelf) {
-                String selfParam = interfaceName + " __self";
+                String selfParam = interfaceName + " " + SELF_PARAM;
                 newParams = newParams.isEmpty() ? selfParam : selfParam + ", " + newParams;
             }
 
@@ -376,11 +500,10 @@ public final class PrivateInterfaceMethodTransformer implements SourceTransforme
             int localBodyStart = bounds.bodyStart - bounds.startIndex;
             String body = methodText.substring(localBodyStart);
             if (needsSelf) {
-                body = SourceDesugarer.transformCodeSegments(body,
-                        (code, context) -> code.replaceAll("\\bthis\\b", "__self"), null);
+                body = replaceThisOutsideNestedTypes(body, SELF_PARAM);
             }
             body = new PrivateInterfaceMethodTransformer().rewritePrivateCalls(
-                    body, methods, helperName, needsSelf ? "__self" : null);
+                    body, methods, helperName, needsSelf ? SELF_PARAM : null);
             return body;
         }
     }
