@@ -116,6 +116,12 @@ public class Java9ToJava8Desugarer {
     // ────────────────────────────────────────────────────────────────────────
 
     public static void main(String[] args) throws Exception {
+        for (String arg : args) {
+            if ("--source".equals(arg)) {
+                Java9SourceDesugarer.main(args);
+                return;
+            }
+        }
         Options options = parseArgs(args);
         if (options == null) {
             printUsage();
@@ -569,6 +575,8 @@ public class Java9ToJava8Desugarer {
     private static void printUsage() {
         System.err.println(
             "Usage: java desugarer.Java9ToJava8Desugarer [--incremental] [--cache-dir <dir>] [--class-path <path>] <input.jar> <output.jar> [backport-classes-dir]");
+        System.err.println(
+            "   or: java -jar desugar9to8.jar --source <file> [--output <file>] [--compile] [--class-path <path>] [--dry-run] [--verbose]");
         System.err.println();
         System.err.println("  <input.jar>            Java 9-compiled JAR to desugar");
         System.err.println("  <output.jar>           Java 8-compatible output JAR");

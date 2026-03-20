@@ -81,37 +81,7 @@ mkdir -p build/backport
 javac -source 8 -target 8 \
   -cp asm-9.4.jar:asm-commons-9.4.jar:asm-tree-9.4.jar \
   -d build/backport \
-  src/j9compat/CollectionBackport.java \
-  src/j9compat/StreamBackport.java \
-  src/j9compat/IntStreamBackport.java \
-  src/j9compat/LongStreamBackport.java \
-  src/j9compat/DoubleStreamBackport.java \
-  src/j9compat/OptionalBackport.java \
-  src/j9compat/OptionalIntBackport.java \
-  src/j9compat/OptionalLongBackport.java \
-  src/j9compat/OptionalDoubleBackport.java \
-  src/j9compat/IOBackport.java \
-  src/j9compat/ObjectsBackport.java \
-  src/j9compat/CompletableFutureBackport.java \
-  src/j9compat/CollectorsBackport.java \
-  src/j9compat/ProcessHandle.java \
-  src/j9compat/StackWalker.java \
-  src/j9compat/Flow.java \
-  src/j9compat/SubmissionPublisher.java \
-  src/j9compat/ModuleBackport.java \
-  src/j9compat/Module.java \
-  src/j9compat/ModuleLayer.java \
-  src/j9compat/ModuleDescriptor.java \
-  src/j9compat/Configuration.java \
-  src/j9compat/ModuleFinder.java \
-  src/j9compat/ModuleReference.java \
-  src/j9compat/ModuleReader.java \
-  src/j9compat/ResolvedModule.java \
-  src/j9compat/VarHandle.java \
-  src/j9compat/BackportMappings.java \
-  src/j9compat/ReflectionBackport.java \
-  src/j9compat/MethodHandlesBackport.java \
-  src/j9compat/PrivateInterfaceAccess.java
+  src/j9compat/*.java
 
 # 2. Compile the desugarer tool
 mkdir -p build/desugarer
@@ -159,6 +129,18 @@ java -jar build/desugar9to8.jar \
   my-app-java9.jar \
   my-app-java8.jar \
   build/backport
+
+### Source desugaring (Java 9 → Java 8 source)
+
+```
+java -jar build/desugar9to8.jar --source MyApp.java --output MyApp.java8.java
+```
+
+To compile immediately after desugaring:
+
+```
+java -jar build/desugar9to8.jar --source MyApp.java --compile
+```
 ```
 
 The output JAR will:
