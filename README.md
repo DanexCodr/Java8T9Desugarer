@@ -88,11 +88,7 @@ mkdir -p build/desugarer
 javac -source 8 -target 8 \
   -cp asm-9.4.jar:asm-commons-9.4.jar:asm-tree-9.4.jar \
   -d build/desugarer \
-  src/desugarer/Java9ToJava8Desugarer.java \
-  src/desugarer/ClassDesugarer.java \
-  src/desugarer/ClassHierarchy.java \
-  src/desugarer/MethodDesugarer.java \
-  src/desugarer/BackportRemapper.java
+  src/desugarer/*.java
 
 # 3. Build a fat JAR (ASM + desugarer classes in one JAR)
 mkdir -p build/fatjar

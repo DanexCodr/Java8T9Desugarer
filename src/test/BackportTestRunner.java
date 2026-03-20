@@ -8,8 +8,8 @@ import java.util.List;
  *
  * <p>Run with:
  * <pre>
- *   javac -source 8 -target 8 -cp build/backport -d build/test src/test/*.java
- *   java -cp build/backport:build/test test.BackportTestRunner
+ *   javac -source 8 -target 8 -cp build/backport:build/desugarer -d build/test src/test/*.java
+ *   java -cp build/backport:build/desugarer:build/test test.BackportTestRunner
  * </pre>
  *
  * <p>Exit code 0 = all tests passed; 1 = at least one failure.
