@@ -7,6 +7,19 @@ fully **Java 8-compatible** JAR, including a bundled runtime backport library
 **Compatibility focus:** runs on **Eclipse Temurin (Adoptium)** and targets
 **Android 11–15 (API 30–34)** deployments with Java 9 bytecode input.
 
+## What this repository provides
+
+- **Desugarer CLI**: rewrites Java 9 bytecode to Java 8 bytecode and optionally
+  bundles the backport classes into the output JAR.
+- **`j9compat` backport library**: Java 8 implementations of Java 9 APIs that
+  your desugared code calls at runtime.
+- **Source desugaring mode**: converts Java 9 source files to Java 8-compatible
+  source (with an optional compile step).
+- **Incremental processing**: cache-based mode to speed up repeated desugaring
+  runs for large JARs.
+- **Test suite + CI**: regression tests and GitHub Actions workflow to validate
+  transformations and backports.
+
 ---
 
 ## What it does
