@@ -427,9 +427,10 @@ push and pull request to `main`.  It:
 
 1. Compiles the desugarer tool and backport library with `javac -source 8 -target 8`.
 2. Packages a fat JAR including ASM.
-3. Compiles a small Java 9 sample class and desugars it.
-4. Verifies the output class file is at major version 52 using `javap`.
-5. Exposes the fat JAR and the sample output as build artefacts.
+3. Compiles Java 9, Java 10, and Java 11 sample programs and desugars each.
+4. Verifies each output class file is at major version 52 using `javap`.
+5. Runs each desugared sample on a Java 8 runtime and checks expected output.
+6. Exposes the fat JAR and desugared sample outputs as build artefacts.
 
 On manual (`workflow_dispatch`) runs you can supply a release-asset filename to
 desugar any JAR attached to the latest release.

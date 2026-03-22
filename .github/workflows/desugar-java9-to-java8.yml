@@ -133,11 +133,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java 8
+      - name: Set up Java 11 (for Java 9-11 sample compilation)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '8'
+          java-version: '11'
 
       - name: Download desugarer artifact
         uses: actions/download-artifact@v4
@@ -153,97 +153,127 @@ jobs:
             -d build/backport \
             src/j9compat/*.java
 
-      # Create a minimal Java 9-style test JAR
-      - name: Create sample Java 9 test JAR
+      - name: Create Java 9-11 sample program JARs
         run: |
-          mkdir -p /tmp/java9sample/com/example
-          cat > /tmp/java9sample/com/example/Java9Features.java << 'JAVA'
+          for release in 9 10 11; do
+            mkdir -p "/tmp/java${release}sample/com/example" "/tmp/java${release}sample/classes"
+          done
+
+          cat > /tmp/java9sample/com/example/Java9Program.java << 'JAVA'
           package com.example;
 
-          import java.util.*;
-          import java.util.stream.*;
-          import java.io.*;
+          import java.util.List;
+          import java.util.Optional;
+          import java.util.stream.Stream;
 
-          public class Java9Features {
-              // Uses Java 9 collection factory methods
-              public List<String> getNames() {
-                  return List.of("Alice", "Bob", "Carol");
-              }
-
-              public Set<Integer> getIds() {
-                  return Set.of(1, 2, 3);
-              }
-
-              public Map<String, Integer> getScores() {
-                  return Map.of("Alice", 95, "Bob", 87);
-              }
-
-              // Uses Java 9 Optional additions
-              public void processOptional(Optional<String> opt) {
-                  opt.ifPresentOrElse(
-                      s -> System.out.println("Value: " + s),
-                      () -> System.out.println("Empty")
+          public class Java9Program {
+              public static void main(String[] args) {
+                  List<String> names = List.of("Alice", "Bob");
+                  long positive = Stream.of(5, 4, -1).takeWhile(n -> n > 0).count();
+                  StringBuilder marker = new StringBuilder();
+                  Optional.<String>empty().ifPresentOrElse(
+                      marker::append,
+                      () -> marker.append("empty")
                   );
-              }
-
-              // Uses Java 9 Stream additions
-              public List<Integer> takePositive(List<Integer> nums) {
-                  return nums.stream()
-                      .takeWhile(n -> n > 0)
-                      .collect(Collectors.toList());
+                  System.out.println(names.size() + ":" + positive + ":" + marker);
               }
           }
           JAVA
 
-          # Compile with Java 9+ (requires JDK 9+; we use -source 9 if available,
-          # otherwise the test is skipped gracefully)
-          if javac -version 2>&1 | grep -q "javac 1\.[678]"; then
-            echo "JDK < 9 detected, skipping Java 9 source compilation."
-            echo "SKIP_DESUGAR=true" >> $GITHUB_ENV
-          else
-            mkdir -p /tmp/java9sample/classes
-            javac --release 9 \
-              -d /tmp/java9sample/classes \
-              /tmp/java9sample/com/example/Java9Features.java || \
-            javac -source 9 -target 9 \
-              -d /tmp/java9sample/classes \
-              /tmp/java9sample/com/example/Java9Features.java
-            cd /tmp/java9sample/classes
-            jar cf /tmp/java9sample/java9sample.jar .
-          fi
+          cat > /tmp/java10sample/com/example/Java10Program.java << 'JAVA'
+          package com.example;
 
-      - name: Run desugarer on sample JAR
-        if: env.SKIP_DESUGAR != 'true'
-        run: |
-          java -jar build/desugar9to8.jar \
-            /tmp/java9sample/java9sample.jar \
-            /tmp/java9sample/java8out.jar \
-            build/backport
+          import java.util.Arrays;
+          import java.util.List;
+          import java.util.Optional;
+          import java.util.stream.Collectors;
+          import java.util.stream.Stream;
 
-      - name: Verify output with javap
-        if: env.SKIP_DESUGAR != 'true'
-        run: |
-          mkdir -p /tmp/java9sample/verify
-          cd /tmp/java9sample/verify
-          jar xf /tmp/java9sample/java8out.jar
-          echo "=== Class file version check ==="
-          javap -v com/example/Java9Features.class | grep "major version"
-          echo ""
-          echo "=== Disassembly ==="
-          javap -c com/example/Java9Features.class
+          public class Java10Program {
+              public static void main(String[] args) {
+                  List<String> copied = List.copyOf(Arrays.asList("x", "y", "x"));
+                  List<String> unmodifiable = Stream.of("left", "right")
+                      .collect(Collectors.toUnmodifiableList());
+                  String value = Optional.of("v").orElseThrow();
+                  System.out.println(copied.get(0) + ":" + unmodifiable.size() + ":" + value);
+              }
+          }
+          JAVA
 
-      - name: Verify output JAR runs on Java 8 JVM
-        if: env.SKIP_DESUGAR != 'true'
+          cat > /tmp/java11sample/com/example/Java11Program.java << 'JAVA'
+          package com.example;
+
+          import java.nio.file.Files;
+          import java.nio.file.Path;
+          import java.util.function.Predicate;
+          import java.util.stream.Stream;
+
+          public class Java11Program {
+              public static void main(String[] args) throws Exception {
+                  Path file = Path.of(System.getProperty("java.io.tmpdir"), "java11program.txt");
+                  Files.writeString(file, "  hi  ");
+                  String text = Files.readString(file);
+                  String stripped = text.strip();
+                  boolean blank = " \n\t".isBlank();
+                  long nonBlank = Stream.of("a", "", "b")
+                      .filter(Predicate.not(String::isBlank))
+                      .count();
+                  System.out.println(stripped + ":" + blank + ":" + nonBlank + ":" + "ha".repeat(2));
+                  Files.deleteIfExists(file);
+              }
+          }
+          JAVA
+
+          for release in 9 10 11; do
+            javac --release "$release" \
+              -d "/tmp/java${release}sample/classes" \
+              "/tmp/java${release}sample/com/example/Java${release}Program.java"
+            jar cf "/tmp/java${release}sample/java${release}sample.jar" \
+              -C "/tmp/java${release}sample/classes" .
+          done
+
+      - name: Run desugarer on Java 9-11 sample JARs
         run: |
-          echo "Output JAR contents:"
-          jar tf /tmp/java9sample/java8out.jar
+          for release in 9 10 11; do
+            java -jar build/desugar9to8.jar \
+              "/tmp/java${release}sample/java${release}sample.jar" \
+              "/tmp/java${release}sample/java8out.jar" \
+              build/backport
+          done
+
+      - name: Verify Java 9-11 outputs are Java 8 class files
+        run: |
+          for release in 9 10 11; do
+            class_name="com.example.Java${release}Program"
+            echo "Checking class version for Java ${release} sample"
+            javap -verbose -classpath "/tmp/java${release}sample/java8out.jar" "$class_name" | grep "major version: 52"
+          done
+
+      - name: Set up Java 8 runtime
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Run desugared Java 9-11 programs on Java 8
+        run: |
+          java -cp /tmp/java9sample/java8out.jar com.example.Java9Program | tee /tmp/java9sample/output.txt
+          grep -Fx "2:2:empty" /tmp/java9sample/output.txt
+
+          java -cp /tmp/java10sample/java8out.jar com.example.Java10Program | tee /tmp/java10sample/output.txt
+          grep -Fx "x:2:v" /tmp/java10sample/output.txt
+
+          java -cp /tmp/java11sample/java8out.jar com.example.Java11Program | tee /tmp/java11sample/output.txt
+          grep -Fx "hi:true:2:haha" /tmp/java11sample/output.txt
 
       - name: Upload desugared output
-        if: env.SKIP_DESUGAR != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: java8-output-sample
-          path: /tmp/java9sample/java8out.jar
+          path: |
+            /tmp/java9sample/java8out.jar
+            /tmp/java10sample/java8out.jar
+            /tmp/java11sample/java8out.jar
 
   # ── 4. (Optional) Desugar a JAR from a release asset ───────────────────────
   desugar-release-jar:
