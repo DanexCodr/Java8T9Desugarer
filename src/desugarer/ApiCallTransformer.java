@@ -190,9 +190,7 @@ public final class ApiCallTransformer implements SourceTransformer {
             updated = replaceInstance(updated, "copy", COMPLETABLE_BACKPORT, "copy", context);
         }
 
-        if (code.contains("getModule")) {
-            updated = replaceInstanceNoArgs(updated, "getModule", MODULE_BACKPORT, "getModule", context);
-        }
+        updated = replaceInstanceNoArgs(updated, "getModule", MODULE_BACKPORT, "getModule", context);
 
         if (imports.isTypeImported("MethodHandles", "java.lang.invoke.MethodHandles")
                 || code.contains("java.lang.invoke.MethodHandles")
